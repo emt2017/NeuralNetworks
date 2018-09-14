@@ -1,0 +1,103 @@
+clc
+clear all
+close all
+
+%Load the training data into memory
+%load FaceTestAndTrainCellArrayData.mat
+%load(['\\kc.umkc.edu\kc-users\home\e\emt9q7\My Documents\MATLAB\NeuralNetsFinalProjectB\PersonTrain\Person' num2str(i) 'Train.mat']);
+
+% img = imread('\\kc.umkc.edu\kc-users\home\e\emt9q7\My Documents\MATLAB\NeuralNetsFinalProjectA\Face_Data\s1\1.pgm')
+%  img = FaceTrainCellArrayData{1}
+%  imshow(img);
+%even numbers on all except for Sparsity Proportion
+
+tTrainF = [];
+yF = [];
+
+hiddenSize = 100;
+L2Weight = 0.004;
+SparsityReg = 2;
+SparsityProportion = 0.15;%no less than 0.05
+
+for i = 1:40
+
+load(['C:\Users\SWAT SEAL\Documents\MATLAB\NeuralNetsFinalProjectB\PersonTrain\Person' num2str(i) 'Train.mat']);
+    
+%normalize data
+FaceTrainCellArrayData;
+
+% Get the number of pixels in each image
+imageWidth = 92;
+imageHeight = 112;
+inputSize = imageWidth*imageHeight;
+
+% Turn the test images into vectors and put them in a matrix
+xTrain = zeros(inputSize,numel(FaceTrainCellArrayData));
+for k = 1:numel(FaceTrainCellArrayData)
+    xTrain(:,k) = FaceTrainCellArrayData{k}(:);
+end
+
+xTrain = xTrain/255;
+
+TrainCell=[];
+for k=1:240
+  Train=reshape(xTrain(:,k),112,92);
+  TrainCell=[TrainCell {Train}];
+end
+
+FaceTrainCellArrayData=TrainCell;
+
+rng('default')
+hiddenSize1 = hiddenSize;
+autoenc1 = trainAutoencoder(FaceTrainCellArrayData,hiddenSize1, ...
+    'MaxEpochs',400, ...
+    'L2WeightRegularization',L2Weight, ...
+    'SparsityRegularization',SparsityReg, ...
+    'SparsityProportion',SparsityProportion, ...
+    'ScaleData', false);
+
+plotWeights(autoenc1);
+feat1 = encode(autoenc1,FaceTrainCellArrayData);
+hiddenSize2 = hiddenSize/2;
+autoenc2 = trainAutoencoder(feat1,hiddenSize2, ...
+    'MaxEpochs',100, ...
+    'L2WeightRegularization',L2Weight/2, ...
+    'SparsityRegularization',SparsityReg, ...
+    'SparsityProportion',SparsityProportion-0.05, ...
+    'ScaleData', false);
+plotWeights(autoenc2);
+feat2 = encode(autoenc2,feat1);
+
+tTrain = [ones(1,6) -ones(1,234)];
+
+net = patternnet(hiddenSize2);
+net = train(net,feat2,tTrain);
+
+%//////////////////////////////////////////////////////////
+deepnet = stack(autoenc1,autoenc2,net);
+save (['C:\Users\SWAT SEAL\Documents\MATLAB\NeuralNetsFinalProjectB/nets/Person' num2str(i) '.mat'], 'deepnet');
+
+% Get the number of pixels in each image
+imageWidth = 92;
+imageHeight = 112;
+inputSize = imageWidth*imageHeight;
+
+% Turn the test images into vectors and put them in a matrix
+xTrain = zeros(inputSize,numel(FaceTrainCellArrayData));
+for k = 1:numel(FaceTrainCellArrayData)
+    xTrain(:,k) = FaceTrainCellArrayData{k}(:);
+end
+y = deepnet(xTrain);
+
+%tTrainEz = [ones(1,6) zeros(1,234)];
+
+yF = cat(2,yF,y);
+tTrainF = cat(2,tTrainF,tTrainEz);
+end
+
+tTrainF = [ones(1,240) zeros(1,9360)];
+
+%save yF and tTrainF
+%y = deepnet(feat2);
+ezroc3(1*yF,tTrainF); %saveezroc3?
+%ezroc3(-1*[ezrocG ezrocI],[ezrocGTargets ezrocITargets]);
